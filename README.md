@@ -1,4 +1,4 @@
-# respect/fluent
+# Respect\Fluent
 
 Build fluent interfaces from class namespaces. PHP 8.5+, zero dependencies.
 
@@ -82,13 +82,10 @@ final readonly class MiddlewareStack extends Append
         );
     }
 
-    // handle domain logic
-    public function handle(Request $request, Handler $handler): Response
+    /** @return array<int, Middleware> */
+    public function layers(): array
     {
-        foreach ($this->getNodes() as $middleware) {
-            // do something
-        }
-        return $handler($request);
+        return $this->getNodes();
     }
 }
 ```
@@ -127,7 +124,7 @@ Update the constructor to use `ComposingLookup`:
 
 ```php
 use Respect\Fluent\Factories\ComposingLookup;
-use Respect\Fluent\Attributes\ComposableAttributes;
+use Respect\Fluent\Resolvers\ComposableAttributes;
 
 $flat = new NamespaceLookup(new Ucfirst(), Middleware::class, 'App\\Middleware');
 parent::__construct(
@@ -275,10 +272,11 @@ Strips a prefix and appends a suffix: `Suffix('of', 'Handler')` turns
 
 #### Composable (attribute)
 
-A PHP attribute that marks a class as a prefix wrapper for composition:
+A PHP attribute that marks a class as a prefix wrapper for composition.
+Constraints (`without`, `with`, `optIn`) are enforced at resolve time:
 
 ```php
-#[Composable('not')]
+#[Composable('not', without: ['not'])]  // prevents notNot()
 final readonly class Not implements Validator
 {
     public function __construct(private Validator $validator) {}
@@ -294,7 +292,8 @@ Discovers `#[Composable]` attributes at runtime and decomposes prefixed names:
 $resolver = new ComposableAttributes($lookup);
 ```
 
-Discovery results are cached for performance.
+Caches prefix discoveries, suffix constraints, and negative lookups for
+performance.
 
 Attribute properties:
 
@@ -308,13 +307,14 @@ Attribute properties:
 
 #### ComposableMap
 
-Optimized `Composable` subclass using a pre-built map instead of runtime
-discovery:
+Pre-built resolver using a compiled prefix map instead of runtime discovery.
+Ideal for code-generated setups where all prefixes are known ahead of time:
 
 ```php
 $resolver = new ComposableMap(
     composable: ['not' => true, 'nullOr' => true],
     composableWithArgument: ['key' => true],
+    forbidden: ['Not' => ['not' => true]],  // suffix => [prefix => true]
 );
 ```
 
