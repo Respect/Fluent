@@ -13,6 +13,7 @@ namespace Respect\Fluent\Resolvers;
 use Respect\Fluent\FluentNode;
 use Respect\Fluent\FluentResolver;
 
+use function lcfirst;
 use function ucfirst;
 
 final readonly class Ucfirst implements FluentResolver
@@ -20,5 +21,10 @@ final readonly class Ucfirst implements FluentResolver
     public function resolve(FluentNode $nodeSpec): FluentNode
     {
         return new FluentNode(ucfirst($nodeSpec->name), $nodeSpec->arguments, $nodeSpec->wrapper);
+    }
+
+    public function unresolve(FluentNode $nodeSpec): FluentNode
+    {
+        return new FluentNode(lcfirst($nodeSpec->name), $nodeSpec->arguments, $nodeSpec->wrapper);
     }
 }

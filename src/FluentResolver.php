@@ -13,4 +13,6 @@ namespace Respect\Fluent;
 interface FluentResolver
 {
     public function resolve(FluentNode $nodeSpec): FluentNode;
+
+    public function unresolve(FluentNode $nodeSpec): FluentNode;
 }

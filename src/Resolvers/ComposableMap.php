@@ -58,6 +58,11 @@ final readonly class ComposableMap implements FluentResolver
         );
     }
 
+    public function unresolve(FluentNode $nodeSpec): FluentNode
+    {
+        return Decompose::compose($nodeSpec);
+    }
+
     private function getRegex(): string
     {
         $alternation = $this->composable

@@ -15,8 +15,8 @@ $stack = Middleware::cors('*')
 $stack->getNodes(); // [Cors('*'), RateLimit(100), Auth('bearer'), JsonBody()]
 ```
 
-Middlewares, validators, processors. Anything that has potential for chain
-composability could leverage respect/fluent.
+Middlewares, validators, processors: anything that composes well as a chain
+can leverage Respect/Fluent.
 
 ## Installation
 
@@ -28,10 +28,8 @@ composer require respect/fluent
 
 ### 1. Choose a namespace and interface
 
-Fluent uses classes from one or more namespaces, and they all must share
-a single interface.
-
-For example:
+Fluent discovers classes from one or more namespaces. Giving them a shared
+interface lets your builder enforce type safety and expose domain methods.
 
 ```php
 namespace App\Middleware;
@@ -57,29 +55,25 @@ final readonly class RateLimit implements Middleware
 
 ### 2. Extend FluentBuilder
 
-The `__call` method, immutable accumulation, and `withNamespace` support are
-inherited. You only add domain logic:
+The `#[FluentNamespace]` attribute declares where your classes live and how to
+resolve them. The builder inherits `__call`, immutable accumulation, and
+`withNamespace` support, you only add domain logic:
 
 ```php
 namespace App;
 
+use Respect\Fluent\Attributes\FluentNamespace;
 use Respect\Fluent\Builders\Append;
 use Respect\Fluent\Factories\NamespaceLookup;
 use Respect\Fluent\Resolvers\Ucfirst;
 use App\Middleware\Middleware;
 
+#[FluentNamespace(new NamespaceLookup(new Ucfirst(), Middleware::class, 'App\\Middleware'))]
 final readonly class MiddlewareStack extends Append
 {
     public function __construct(Middleware ...$layers)
     {
-        parent::__construct(
-            new NamespaceLookup(
-                new Ucfirst(),     // fooBar -> new FooBar
-                Middleware::class, // FooBar implements Middleware
-                'App\\Middleware'  // App\Middleware\FooBar
-            ),
-            ...$layers,
-        );
+        parent::__construct(static::factoryFromAttribute(), ...$layers);
     }
 
     /** @return array<int, Middleware> */
@@ -90,15 +84,20 @@ final readonly class MiddlewareStack extends Append
 }
 ```
 
-That's it. `MiddlewareStack::cors()->auth('bearer')->jsonBody()` then
-builds the layers for you.
+The attribute carries the full factory configuration: the resolver (`Ucfirst`),
+optional type constraint (`Middleware::class`), and namespace to search. The
+inherited `factoryFromAttribute()` reads it at runtime so there's a single
+source of truth.
+
+Now `MiddlewareStack::cors()->auth('bearer')->jsonBody()` builds the
+layers for you.
 
 ### 3. Add composition if you want
 
 Prefix composition lets `optionalAuth()` create `Optional(Auth())`. You're
-not limited to `Optional` cases, you can design nesting as much as you want.
+not limited to `Optional` cases, you can design nesting as deep as you want.
 
-Annotate wrapper classes with `#[Composable]` and use `ComposingLookup`:
+Annotate wrapper classes with `#[Composable]`:
 
 ```php
 namespace App\Middleware;
@@ -120,17 +119,16 @@ final readonly class Optional implements Middleware
 }
 ```
 
-Update the constructor to use `ComposingLookup`:
+Then switch the attribute to use `ComposingLookup`, it automatically discovers
+`#[Composable]` prefixes from the same namespace:
 
 ```php
 use Respect\Fluent\Factories\ComposingLookup;
-use Respect\Fluent\Resolvers\ComposableAttributes;
 
-$flat = new NamespaceLookup(new Ucfirst(), Middleware::class, 'App\\Middleware');
-parent::__construct(
-    new ComposingLookup($flat, new ComposableAttributes($flat)),
-    ...$layers,
-);
+#[FluentNamespace(new ComposingLookup(
+    new NamespaceLookup(new Ucfirst(), Middleware::class, 'App\\Middleware'),
+))]
+final readonly class MiddlewareStack extends Append { /* ... */ }
 ```
 
 Now `MiddlewareStack::optionalAuth('bearer')` creates `Optional(Auth('bearer'))`.
@@ -174,16 +172,38 @@ a name, constructor arguments, and an optional wrapper.
 ```
 
 **NamespaceLookup vs ComposingLookup:** use `NamespaceLookup` for simple
-name→class mapping. Add `ComposingLookup` when you need prefix composition
-like `notEmail()` → `Not(Email())`. `ComposingLookup` supports recursive
-unwrapping, so `notNullOrEmail()` → `Not(NullOr(Email()))` works too.
+name-to-class mapping. Wrap it with `ComposingLookup` when you need prefix
+composition like `notEmail()` → `Not(Email())`. `ComposingLookup` supports
+recursive unwrapping, so `notNullOrEmail()` → `Not(NullOr(Email()))` works too.
 
 ## API Reference
+
+### FluentNamespace (attribute)
+
+Declares the factory configuration for a builder class. Both the runtime
+(`factoryFromAttribute()`) and static analysis (FluentAnalysis) read from this
+single source of truth:
+
+```php
+use Respect\Fluent\Attributes\FluentNamespace;
+
+// Simple lookup
+#[FluentNamespace(new NamespaceLookup(new Ucfirst(), null, 'App\\Handlers'))]
+
+// With type validation
+#[FluentNamespace(new NamespaceLookup(new Ucfirst(), Handler::class, 'App\\Handlers'))]
+
+// With prefix composition
+#[FluentNamespace(new ComposingLookup(
+    new NamespaceLookup(new Ucfirst(), Validator::class, 'App\\Validators'),
+))]
+```
 
 ### Builders
 
 Abstract base `FluentBuilder` provides `__call`, `__callStatic`, `getNodes()`,
-`withNamespace()`, and the abstract `attach()` method. Two concrete builders:
+`withNamespace()`, `factoryFromAttribute()`, and the abstract `attach()` method.
+Two concrete builders:
 
 **`Append`** — each `attach()` appends nodes to the end:
 
@@ -203,7 +223,7 @@ $chain = $builder->cors()->auth('bearer');
 $chain->getNodes();                      // [Auth('bearer'), Cors()]
 ```
 
-Both are `readonly` and not `final` — extend them and add your domain methods.
+Both are `readonly` and not `final`, extend them and add your domain methods.
 `__callStatic` calls `new static()` by default; override it if your subclass
 needs a different way to obtain a default instance.
 
@@ -235,40 +255,59 @@ $lookup->create('email', ['strict' => true]);  // new App\Handlers\Email(strict:
 $lookup->resolve('email');                      // ReflectionClass (without instantiating)
 ```
 
+The `$resolver` and `$namespaces` properties are `public private(set)`, you
+can read them (useful for tooling like FluentAnalysis) but not reassign them.
+
 Immutable builders: `withNamespace()` prepends a namespace, `withNodeType()`
 adds type validation. Both return new instances.
 
 #### ComposingLookup
 
-Wraps a `NamespaceLookup` + `FluentResolver` to handle prefix composition. When
-the resolver produces a wrapper FluentNode, ComposingLookup creates the inner
-instance first, then wraps it. Supports recursive unwrapping for nested
-wrappers.
+Wraps a `NamespaceLookup` to handle prefix composition. When the resolver
+produces a wrapper FluentNode, ComposingLookup creates the inner instance
+first, then wraps it. Supports recursive unwrapping for nested wrappers.
 
 ```php
-$nested = new ComposingLookup($lookup, new ComposableAttributes($lookup));
-$nested->create('notEmail');  // Not(Email())
+$nested = new ComposingLookup($lookup);  // defaults to ComposableAttributes
+$nested->create('notEmail');             // Not(Email())
+```
+
+You can pass a custom resolver as the second argument if you don't want
+automatic `#[Composable]` attribute discovery:
+
+```php
+$nested = new ComposingLookup($lookup, new ComposableMap(
+    composable: ['not' => true],
+));
 ```
 
 ### FluentResolver
 
-Interface for name transformers:
+Interface for name transformers. Each resolver can `resolve` a method name
+into a class name, and `unresolve` it back:
 
 ```php
 interface FluentResolver
 {
     public function resolve(FluentNode $nodeSpec): FluentNode;
+    public function unresolve(FluentNode $nodeSpec): FluentNode;
 }
 ```
+
+The `unresolve` method is the inverse of `resolve`: it converts a class name
+back to the method name that would produce it. This is used by FluentAnalysis
+to derive method maps from discovered classes.
 
 #### Ucfirst
 
 Capitalizes the first letter: `'email'` → `'Email'`.
+Unresolve does the opposite: `'Email'` → `'email'`.
 
 #### Suffix
 
 Strips a prefix and appends a suffix: `Suffix('of', 'Handler')` turns
 `'ofArray'` → `'ArrayHandler'`.
+Unresolve reverses it: `'ArrayHandler'` → `'ofArray'`.
 
 #### Composable (attribute)
 
@@ -283,6 +322,16 @@ final readonly class Not implements Validator
 }
 ```
 
+Attribute properties:
+
+| Property          | Type     | Purpose                                         |
+|-------------------|----------|-------------------------------------------------|
+| `prefix`          | `string` | Registers this class as a composition prefix    |
+| `prefixParameter` | `bool`   | First argument goes to the wrapper              |
+| `optIn`           | `bool`   | Only compose with prefixes listed in `with`     |
+| `without`         | `array`  | Prefixes this class should not be composed with |
+| `with`            | `array`  | Prefixes this class should be composed with     |
+
 #### ComposableAttributes
 
 Discovers `#[Composable]` attributes at runtime and decomposes prefixed names:
@@ -293,22 +342,12 @@ $resolver = new ComposableAttributes($lookup);
 ```
 
 Caches prefix discoveries, suffix constraints, and negative lookups for
-performance.
-
-Attribute properties:
-
-| Property | Type | Purpose |
-|---|---|---|
-| `prefix` | `string` | Registers this class as a composition prefix |
-| `prefixParameter` | `bool` | First argument goes to the wrapper |
-| `optIn` | `bool` | Only compose with prefixes listed in `with` |
-| `without` | `array` | Prefixes this class should not be composed with |
-| `with` | `array` | Prefixes this class should be composed with |
+performance. Unresolve flattens wrapper structures back to flat names.
 
 #### ComposableMap
 
 Pre-built resolver using a compiled prefix map instead of runtime discovery.
-Ideal for code-generated setups where all prefixes are known ahead of time:
+Useful for code-generated setups where all prefixes are known ahead of time:
 
 ```php
 $resolver = new ComposableMap(
@@ -333,7 +372,7 @@ new FluentNode(
 ### Exceptions
 
 All exceptions implement `FluentException` (a `Throwable` marker interface),
-so consumers can catch all Fluent errors with a single type:
+so you can catch all Fluent errors with a single type:
 
 ```php
 use Respect\Fluent\Exceptions\FluentException;
@@ -345,9 +384,9 @@ try {
 }
 ```
 
-| Exception | Parent | Thrown when |
-|---|---|---|
-| `CouldNotResolve` | `InvalidArgumentException` | Name not found in any registered namespace |
-| `CouldNotCreate` | `InvalidArgumentException` | Instantiation failed or type validation failed |
+| Exception         | Parent                     | Thrown when                                    |
+|-------------------|----------------------------|------------------------------------------------|
+| `CouldNotResolve` | `InvalidArgumentException` | Name not found in any registered namespace     |
+| `CouldNotCreate`  | `InvalidArgumentException` | Instantiation failed or type validation failed |
 
 Both extend `InvalidArgumentException` for backwards compatibility.

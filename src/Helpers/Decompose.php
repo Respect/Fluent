@@ -36,4 +36,27 @@ final class Decompose
             new FluentNode($prefix, [$nodeSpec->arguments[0]]),
         );
     }
+
+    public static function compose(FluentNode $nodeSpec): FluentNode
+    {
+        if ($nodeSpec->wrapper === null) {
+            return $nodeSpec;
+        }
+
+        $name = $nodeSpec->wrapper->name . $nodeSpec->name;
+
+        if ($nodeSpec->wrapper->arguments !== []) {
+            return new FluentNode(
+                $name,
+                [...$nodeSpec->wrapper->arguments, ...$nodeSpec->arguments],
+                $nodeSpec->wrapper->wrapper,
+            );
+        }
+
+        return new FluentNode(
+            $name,
+            $nodeSpec->arguments,
+            $nodeSpec->wrapper->wrapper,
+        );
+    }
 }

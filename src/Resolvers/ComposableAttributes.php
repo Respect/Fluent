@@ -73,6 +73,11 @@ final class ComposableAttributes implements FluentResolver
         return $nodeSpec;
     }
 
+    public function unresolve(FluentNode $nodeSpec): FluentNode
+    {
+        return Decompose::compose($nodeSpec);
+    }
+
     private function isAllowed(string $prefix, Composable $suffixAttr): bool
     {
         if ($suffixAttr->optIn) {

@@ -18,6 +18,7 @@ use Respect\Fluent\Factories\ComposingLookup;
 use Respect\Fluent\Factories\NamespaceLookup;
 use Respect\Fluent\FluentNode;
 use Respect\Fluent\FluentResolver;
+use Respect\Fluent\Helpers\Decompose;
 use Respect\Fluent\Resolvers\ComposableMap;
 use Respect\Fluent\Resolvers\Ucfirst;
 use Respect\Fluent\Test\Fixtures\NsA\Foo;
@@ -109,6 +110,11 @@ final class ComposingLookupTest extends TestCase
                 }
 
                 return $nodeSpec;
+            }
+
+            public function unresolve(FluentNode $nodeSpec): FluentNode
+            {
+                return Decompose::compose($nodeSpec);
             }
         };
 

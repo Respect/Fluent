@@ -26,11 +26,11 @@ use function trim;
 final readonly class NamespaceLookup implements ReflectiveFactory
 {
     /** @var array<int, string> */
-    private array $namespaces;
+    public private(set) array $namespaces;
 
     /** @param class-string|null $nodeType Expected interface for resolved nodes */
     public function __construct(
-        private FluentResolver $resolver,
+        public private(set) FluentResolver $resolver,
         private string|null $nodeType = null,
         string ...$namespaces,
     ) {

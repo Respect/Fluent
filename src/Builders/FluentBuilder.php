@@ -10,13 +10,16 @@ declare(strict_types=1);
 
 namespace Respect\Fluent\Builders;
 
+use ReflectionClass;
+use Respect\Fluent\Attributes\FluentNamespace;
 use Respect\Fluent\FluentFactory;
 
 use function array_values;
 
+/** @template TNodes of list<object> */
 abstract readonly class FluentBuilder
 {
-    /** @var array<int, object> */
+    /** @var list<object> */
     protected array $nodes;
 
     public function __construct(
@@ -28,7 +31,7 @@ abstract readonly class FluentBuilder
 
     abstract public function attach(object ...$nodes): static;
 
-    /** @return array<int, object> */
+    /** @return list<object> */
     public function getNodes(): array
     {
         return $this->nodes;
@@ -37,6 +40,14 @@ abstract readonly class FluentBuilder
     public function withNamespace(string $namespace): static
     {
         return clone ($this, ['factory' => $this->factory->withNamespace($namespace)]);
+    }
+
+    protected static function factoryFromAttribute(): FluentFactory
+    {
+        return (new ReflectionClass(static::class))
+            ->getAttributes(FluentNamespace::class)[0]
+            ->newInstance()
+            ->factory;
     }
 
     /** @param array<int|string, mixed> $arguments */

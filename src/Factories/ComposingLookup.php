@@ -13,18 +13,22 @@ namespace Respect\Fluent\Factories;
 use Respect\Fluent\FluentFactory;
 use Respect\Fluent\FluentNode;
 use Respect\Fluent\FluentResolver;
+use Respect\Fluent\Resolvers\ComposableAttributes;
 
 final readonly class ComposingLookup implements FluentFactory
 {
+    private FluentResolver $resolver;
+
     public function __construct(
-        private NamespaceLookup $lookup,
-        private FluentResolver $resolver,
+        public private(set) NamespaceLookup $lookup,
+        FluentResolver|null $resolver = null,
     ) {
+        $this->resolver = $resolver ?? new ComposableAttributes($lookup);
     }
 
     public function withNamespace(string $namespace): self
     {
-        return new self($this->lookup->withNamespace($namespace), $this->resolver);
+        return clone ($this, ['lookup' => $this->lookup->withNamespace($namespace)]);
     }
 
     /**
