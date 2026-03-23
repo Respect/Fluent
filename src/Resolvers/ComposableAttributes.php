@@ -25,10 +25,7 @@ use function substr;
 final class ComposableAttributes implements FluentResolver
 {
     /** @var array<string, Composable|false> */
-    private array $discovered = [];
-
-    /** @var array<string, Composable|false> */
-    private array $suffixCache = [];
+    private array $attributes = [];
 
     public function __construct(
         private readonly NamespaceLookup $lookup,
@@ -60,13 +57,13 @@ final class ComposableAttributes implements FluentResolver
             $candidatePrefix = substr($name, 0, $i);
             $candidateSuffix = substr($name, $i);
 
-            $attr = $this->discoverPrefix($candidatePrefix);
-            if ($attr === null) {
+            $attr = $this->discoverAttribute($candidatePrefix);
+            if ($attr === null || $attr->prefix === '') {
                 continue;
             }
 
-            $suffixConstraints = $this->discoverSuffixConstraints($candidateSuffix);
-            if ($suffixConstraints !== null && !$this->isAllowed($attr->prefix, $suffixConstraints)) {
+            $suffixAttr = $this->discoverAttribute($candidateSuffix);
+            if ($suffixAttr !== null && !$this->isAllowed($attr->prefix, $suffixAttr)) {
                 continue;
             }
 
@@ -74,32 +71,6 @@ final class ComposableAttributes implements FluentResolver
         }
 
         return $nodeSpec;
-    }
-
-    private function discoverSuffixConstraints(string $suffix): Composable|null
-    {
-        if (isset($this->suffixCache[$suffix])) {
-            $cached = $this->suffixCache[$suffix];
-
-            return $cached === false ? null : $cached;
-        }
-
-        try {
-            $reflection = $this->lookup->resolve($suffix);
-            $attrs = $reflection->getAttributes(Composable::class);
-            if ($attrs !== []) {
-                $attr = $attrs[0]->newInstance();
-                $this->suffixCache[$suffix] = $attr;
-
-                return $attr;
-            }
-        } catch (CouldNotResolve) {
-            // Suffix class not found, no constraints to check
-        }
-
-        $this->suffixCache[$suffix] = false;
-
-        return null;
     }
 
     private function isAllowed(string $prefix, Composable $suffixAttr): bool
@@ -111,30 +82,28 @@ final class ComposableAttributes implements FluentResolver
         return !in_array($prefix, $suffixAttr->without, true);
     }
 
-    private function discoverPrefix(string $candidatePrefix): Composable|null
+    private function discoverAttribute(string $name): Composable|null
     {
-        if (isset($this->discovered[$candidatePrefix])) {
-            $cached = $this->discovered[$candidatePrefix];
+        if (isset($this->attributes[$name])) {
+            $cached = $this->attributes[$name];
 
             return $cached === false ? null : $cached;
         }
 
         try {
-            $reflection = $this->lookup->resolve($candidatePrefix);
+            $reflection = $this->lookup->resolve($name);
             $attrs = $reflection->getAttributes(Composable::class);
             if ($attrs !== []) {
                 $attr = $attrs[0]->newInstance();
-                if ($attr->prefix !== '') {
-                    $this->discovered[$candidatePrefix] = $attr;
+                $this->attributes[$name] = $attr;
 
-                    return $attr;
-                }
+                return $attr;
             }
         } catch (CouldNotResolve) {
-            // Not a valid class
+            // Class not found in any namespace
         }
 
-        $this->discovered[$candidatePrefix] = false;
+        $this->attributes[$name] = false;
 
         return null;
     }
