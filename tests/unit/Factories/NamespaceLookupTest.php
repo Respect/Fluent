@@ -132,4 +132,24 @@ final class NamespaceLookupTest extends TestCase
 
         $lookup->create('foo');
     }
+
+    #[Test]
+    public function itShouldSupportWithNodeType(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\NsA');
+        $typed = $lookup->withNodeType(NsAFoo::class);
+
+        $instance = $typed->create('foo');
+
+        self::assertInstanceOf(NsAFoo::class, $instance);
+    }
+
+    #[Test]
+    public function itShouldThrowCouldNotCreateWhenInstantiationFails(): void
+    {
+        $this->expectException(CouldNotCreate::class);
+
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\NsA');
+        $lookup->create('uninstantiable');
+    }
 }

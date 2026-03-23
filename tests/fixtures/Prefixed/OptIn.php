@@ -12,11 +12,7 @@ namespace Respect\Fluent\Test\Fixtures\Prefixed;
 
 use Respect\Fluent\Attributes\Composable;
 
-#[Composable('not', without: ['not'])]
-final class Not
+#[Composable(optIn: true, with: ['key'])]
+final class OptIn
 {
-    public function __construct(
-        public readonly object $inner,
-    ) {
-    }
 }

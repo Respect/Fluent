@@ -203,6 +203,22 @@ final class PrefixTest extends TestCase
     }
 
     #[Test]
+    public function discoveryShouldCacheSuffixConstraints(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+
+        // Both resolve the same suffix 'Foo' with different prefixes, exercising the suffix cache
+        $result1 = $sut->resolve(new FluentNode('notFoo'));
+        $result2 = $sut->resolve(new FluentNode('keyFoo', ['myKey']));
+
+        self::assertNotNull($result1->wrapper);
+        self::assertSame('not', $result1->wrapper->name);
+        self::assertNotNull($result2->wrapper);
+        self::assertSame('key', $result2->wrapper->name);
+    }
+
+    #[Test]
     public function discoveryShouldNotDecomposeWhenPrefixClassLacksAttribute(): void
     {
         $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
@@ -213,5 +229,114 @@ final class PrefixTest extends TestCase
 
         self::assertSame('emailFoo', $result->name);
         self::assertNull($result->wrapper);
+    }
+
+    #[Test]
+    public function discoveryShouldRejectCompositionForbiddenByWithout(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+        $spec = new FluentNode('notNot');
+
+        $result = $sut->resolve($spec);
+
+        // Not has without: ['not'], so notNot should not decompose
+        self::assertSame('notNot', $result->name);
+        self::assertNull($result->wrapper);
+    }
+
+    #[Test]
+    public function mapShouldRejectForbiddenComposition(): void
+    {
+        $sut = new ComposableMap(
+            ['not' => true],
+            [],
+            ['Not' => ['not' => true]],
+        );
+        $spec = new FluentNode('notNot');
+
+        $result = $sut->resolve($spec);
+
+        // Forbidden map blocks not+Not composition
+        self::assertSame('notNot', $result->name);
+        self::assertNull($result->wrapper);
+    }
+
+    #[Test]
+    public function discoveryShouldRejectCompositionForbiddenByOptIn(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+        // OptIn has optIn: true, with: ['key'] — only 'key' prefix is allowed
+        $spec = new FluentNode('notOptIn');
+
+        $result = $sut->resolve($spec);
+
+        // 'not' is not in the 'with' list, so composition is rejected
+        self::assertSame('notOptIn', $result->name);
+        self::assertNull($result->wrapper);
+    }
+
+    #[Test]
+    public function discoveryShouldAllowCompositionPermittedByOptIn(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+        // OptIn has optIn: true, with: ['key'] — 'key' prefix is allowed
+        $spec = new FluentNode('keyOptIn', ['myKey']);
+
+        $result = $sut->resolve($spec);
+
+        self::assertSame('OptIn', $result->name);
+        self::assertNotNull($result->wrapper);
+        self::assertSame('key', $result->wrapper->name);
+    }
+
+    #[Test]
+    public function discoveryShouldHandleUnresolvableSuffix(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+        // 'notZzz' — prefix 'not' is valid, but 'Zzz' doesn't exist as a class
+        $spec = new FluentNode('notZzz');
+
+        $result = $sut->resolve($spec);
+
+        // Suffix class doesn't exist, but decomposition still works (no constraints to check)
+        self::assertSame('Zzz', $result->name);
+        self::assertNotNull($result->wrapper);
+        self::assertSame('not', $result->wrapper->name);
+    }
+
+    #[Test]
+    public function discoveryShouldSkipNonComposablePrefix(): void
+    {
+        $lookup = new NamespaceLookup(new Ucfirst(), null, 'Respect\\Fluent\\Test\\Fixtures\\Prefixed');
+        $sut = new ComposableAttributes($lookup);
+        // 'barFoo' — 'Bar' exists but has no Composable attribute
+        $spec = new FluentNode('barFoo');
+
+        $result = $sut->resolve($spec);
+
+        self::assertSame('barFoo', $result->name);
+        self::assertNull($result->wrapper);
+    }
+
+    #[Test]
+    public function mapShouldAllowNonForbiddenComposition(): void
+    {
+        $sut = new ComposableMap(
+            ['not' => true],
+            [],
+            ['Not' => ['not' => true]],
+        );
+        $spec = new FluentNode('notEmail');
+
+        $result = $sut->resolve($spec);
+
+        // Email is not in the forbidden map, so notEmail decomposes normally
+        self::assertSame('Email', $result->name);
+        self::assertNotNull($result->wrapper);
+        self::assertSame('not', $result->wrapper->name);
     }
 }

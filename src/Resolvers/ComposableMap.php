@@ -29,10 +29,12 @@ final readonly class ComposableMap implements FluentResolver
     /**
      * @param array<string, true> $composable
      * @param array<string, true> $composableWithArgument
+     * @param array<string, array<string, true>> $forbidden              suffix => [prefix => true]
      */
     public function __construct(
         private array $composable,
         private array $composableWithArgument = [],
+        private array $forbidden = [],
     ) {
     }
 
@@ -44,7 +46,7 @@ final readonly class ComposableMap implements FluentResolver
 
         preg_match($this->getRegex(), $nodeSpec->name, $matches);
 
-        if ($matches === []) {
+        if ($matches === [] || isset($this->forbidden[$matches['suffix']][$matches['prefix']])) {
             return $nodeSpec;
         }
 
