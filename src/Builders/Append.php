@@ -12,7 +12,7 @@ namespace Respect\Fluent\Builders;
 
 use function array_values;
 
-/** @extends FluentBuilder<list<object>> */
+/** @extends FluentBuilder<list<object>, mixed, never> */
 readonly class Append extends FluentBuilder
 {
     public function attach(object ...$nodes): static

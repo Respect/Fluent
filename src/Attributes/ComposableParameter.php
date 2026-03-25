@@ -8,11 +8,11 @@
 
 declare(strict_types=1);
 
-namespace Respect\Fluent\Test\Fixtures\Prefixed;
+namespace Respect\Fluent\Attributes;
 
-use Respect\Fluent\Attributes\Composable;
+use Attribute;
 
-#[Composable(optIn: true, with: [Key::class])]
-final class OptIn
+#[Attribute(Attribute::TARGET_PARAMETER)]
+final readonly class ComposableParameter
 {
 }

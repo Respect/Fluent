@@ -16,7 +16,11 @@ use Respect\Fluent\FluentFactory;
 
 use function array_values;
 
-/** @template TNodes of list<object> */
+/**
+ * @template TNodes of list<object>
+ * @template TSure
+ * @template TSureNot
+ */
 abstract readonly class FluentBuilder
 {
     /** @var list<object> */

@@ -8,11 +8,11 @@
 
 declare(strict_types=1);
 
-namespace Respect\Fluent\Test\Fixtures\Prefixed;
+namespace Respect\Fluent\Attributes;
 
-use Respect\Fluent\Attributes\Composable;
-
-#[Composable(optIn: true, with: [Key::class])]
-final class OptIn
+enum AssuranceFrom: string
 {
+    case Value = 'value';
+    case Member = 'member';
+    case Elements = 'elements';
 }

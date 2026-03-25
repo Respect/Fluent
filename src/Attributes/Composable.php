@@ -16,12 +16,12 @@ use Attribute;
 final readonly class Composable
 {
     /**
-     * @param array<string> $without
-     * @param array<string> $with
+     * @param class-string|null $prefix
+     * @param list<class-string> $without
+     * @param list<class-string> $with
      */
     public function __construct(
-        public string $prefix = '',
-        public bool $prefixParameter = false,
+        public string|null $prefix = null,
         public bool $optIn = false,
         public array $without = [],
         public array $with = [],

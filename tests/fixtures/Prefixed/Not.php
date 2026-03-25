@@ -12,7 +12,7 @@ namespace Respect\Fluent\Test\Fixtures\Prefixed;
 
 use Respect\Fluent\Attributes\Composable;
 
-#[Composable('not', without: ['not'])]
+#[Composable(self::class, without: [self::class])]
 final class Not
 {
     public function __construct(

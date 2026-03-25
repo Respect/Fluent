@@ -10,7 +10,9 @@ declare(strict_types=1);
 
 namespace Respect\Fluent\Resolvers;
 
+use ReflectionClass;
 use Respect\Fluent\Attributes\Composable;
+use Respect\Fluent\Attributes\ComposableParameter;
 use Respect\Fluent\Exceptions\CouldNotResolve;
 use Respect\Fluent\Factories\NamespaceLookup;
 use Respect\Fluent\FluentNode;
@@ -24,7 +26,7 @@ use function substr;
 
 final class ComposableAttributes implements FluentResolver
 {
-    /** @var array<string, Composable|false> */
+    /** @var array<string, array{Composable, class-string, bool}|false> */
     private array $attributes = [];
 
     public function __construct(
@@ -57,17 +59,20 @@ final class ComposableAttributes implements FluentResolver
             $candidatePrefix = substr($name, 0, $i);
             $candidateSuffix = substr($name, $i);
 
-            $attr = $this->discoverAttribute($candidatePrefix);
-            if ($attr === null || $attr->prefix === '') {
+            $discovered = $this->discoverAttribute($candidatePrefix);
+            if ($discovered === null || $discovered[0]->prefix === null) {
                 continue;
             }
 
-            $suffixAttr = $this->discoverAttribute($candidateSuffix);
-            if ($suffixAttr !== null && !$this->isAllowed($attr->prefix, $suffixAttr)) {
+            $prefixFqcn = $discovered[1];
+            $hasComposableParameter = $discovered[2];
+
+            $suffixDiscovered = $this->discoverAttribute($candidateSuffix);
+            if ($suffixDiscovered !== null && !$this->isAllowed($prefixFqcn, $suffixDiscovered[0])) {
                 continue;
             }
 
-            return Decompose::nodeSpec($nodeSpec, $candidatePrefix, $candidateSuffix, $attr->prefixParameter);
+            return Decompose::nodeSpec($nodeSpec, $candidatePrefix, $candidateSuffix, $hasComposableParameter);
         }
 
         return $nodeSpec;
@@ -78,16 +83,18 @@ final class ComposableAttributes implements FluentResolver
         return Decompose::compose($nodeSpec);
     }
 
-    private function isAllowed(string $prefix, Composable $suffixAttr): bool
+    /** @param class-string $prefixFqcn */
+    private function isAllowed(string $prefixFqcn, Composable $suffixAttr): bool
     {
         if ($suffixAttr->optIn) {
-            return in_array($prefix, $suffixAttr->with, true);
+            return in_array($prefixFqcn, $suffixAttr->with, true);
         }
 
-        return !in_array($prefix, $suffixAttr->without, true);
+        return !in_array($prefixFqcn, $suffixAttr->without, true);
     }
 
-    private function discoverAttribute(string $name): Composable|null
+    /** @return array{Composable, class-string, bool}|null */
+    private function discoverAttribute(string $name): array|null
     {
         if (isset($this->attributes[$name])) {
             $cached = $this->attributes[$name];
@@ -100,9 +107,11 @@ final class ComposableAttributes implements FluentResolver
             $attrs = $reflection->getAttributes(Composable::class);
             if ($attrs !== []) {
                 $attr = $attrs[0]->newInstance();
-                $this->attributes[$name] = $attr;
+                $fqcn = $reflection->getName();
+                $hasComposableParameter = self::hasComposableParameter($reflection);
+                $this->attributes[$name] = [$attr, $fqcn, $hasComposableParameter];
 
-                return $attr;
+                return [$attr, $fqcn, $hasComposableParameter];
             }
         } catch (CouldNotResolve) {
             // Class not found in any namespace
@@ -111,5 +120,34 @@ final class ComposableAttributes implements FluentResolver
         $this->attributes[$name] = false;
 
         return null;
+    }
+
+    /** @param ReflectionClass<object> $reflection */
+    private static function hasComposableParameter(ReflectionClass $reflection): bool
+    {
+        $constructor = $reflection->getConstructor();
+
+        if ($constructor === null) {
+            return false;
+        }
+
+        $parameters = $constructor->getParameters();
+        if ($parameters === []) {
+            return false;
+        }
+
+        $composableCount = 0;
+        foreach ($parameters as $index => $parameter) {
+            if ($parameter->getAttributes(ComposableParameter::class) === []) {
+                continue;
+            }
+
+            $composableCount++;
+            if ($index !== 0) {
+                return false;
+            }
+        }
+
+        return $composableCount === 1;
     }
 }
