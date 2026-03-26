@@ -15,9 +15,12 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 final readonly class Assurance
 {
-    /** @param array{int, int|null}|null $composeRange */
+    /**
+     * @param string|list<string>|null $type
+     * @param array{int, int|null}|null $composeRange
+     */
     public function __construct(
-        public string|null $type = null,
+        public string|array|null $type = null,
         public AssuranceFrom|null $from = null,
         public AssuranceCompose|null $compose = null,
         public array|null $composeRange = null,
