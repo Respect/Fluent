@@ -75,14 +75,18 @@ final readonly class ValidatorBuilder extends Append
 
 ### AssuranceParameter
 
-Marks a parameter for assurance type resolution. Contextual based on where it
-appears:
+Selects **which** argument carries the assurance information — purely an index,
+defaulting to the first parameter when absent. It does not itself imply any
+particular derivation; `from:` decides how the selected argument maps to the
+assured type. Contextual based on where it appears:
 
-**On a constructor parameter** — the parameter's value determines the assurance
-type (replaces the old `parameter:` string reference):
+**On a constructor parameter** — selects which argument is the type source. The
+example below pairs it with `from: TypeString` so the class-string argument
+narrows to an instance of that class (replaces the old `parameter:` string
+reference):
 
 ```php
-#[Assurance]
+#[Assurance(from: AssuranceFrom::TypeString, exact: true)]
 final readonly class Instance implements Validator
 {
     public function __construct(
@@ -302,8 +306,9 @@ FluentAnalysis reads this to determine how each node narrows a type:
 #[Assurance(type: 'int')]
 final readonly class IntType implements Validator { /* ... */ }
 
-// Type from a constructor parameter (use #[AssuranceParameter])
-#[Assurance]
+// Instance of the class named by a class-string argument
+// (#[AssuranceParameter] selects which argument; from: TypeString the derivation)
+#[Assurance(from: AssuranceFrom::TypeString, exact: true)]
 final readonly class Instance implements Validator
 {
     public function __construct(
@@ -346,24 +351,32 @@ final readonly class When implements Validator
     public function __construct(Validator $when, Validator $then, Validator $else) {}
 }
 
-// Modifier: exclude type instead of asserting it
+// Exact: passes if and only if the input is of the declared type
+#[Assurance(type: 'int', exact: true)]
+final readonly class IntType implements Validator { /* ... */ }
+
+// Modifier on a Wrap prefix: negate the wrapped node's assurance
 #[Assurance(modifier: AssuranceModifier::Exclude)]
+#[AssuranceSubject(AssuranceSubjectMode::Wrap)]
 final readonly class Not implements Validator { /* ... */ }
 
-// Modifier: add null to the assured type
-#[Assurance(modifier: AssuranceModifier::Nullable)]
+// Bypass set on a Wrap prefix: 'null' is admitted in union with the
+// wrapped node's assurance (nullOrIntType() assures int|null)
+#[Assurance(type: 'null', exact: true)]
+#[AssuranceSubject(AssuranceSubjectMode::Wrap)]
 final readonly class NullOr implements Validator { /* ... */ }
 ```
 
 Properties:
 
-| Property       | Type                     | Purpose                                                          |
-|----------------|--------------------------|------------------------------------------------------------------|
-| `type`         | `?string`                | Fixed type string (e.g. `'int'`, `'string'`)                     |
-| `from`         | `?AssuranceFrom`         | Derive type from a method argument                               |
-| `compose`      | `?AssuranceCompose`      | Combine assurances from child validators                         |
-| `composeRange` | `?array{int, int\|null}` | Subset of arguments to compose (`[from, to]`, null = open-ended) |
-| `modifier`     | `?AssuranceModifier`     | Modify how the assurance is applied                              |
+| Property       | Type                         | Purpose                                                          |
+|----------------|------------------------------|------------------------------------------------------------------|
+| `type`         | `string\|list<string>\|null` | Fixed type string (e.g. `'int'`); a list means their union       |
+| `from`         | `?AssuranceFrom`             | Derive type from a method argument                               |
+| `compose`      | `?AssuranceCompose`          | Combine assurances from child validators                         |
+| `composeRange` | `?array{int, int\|null}`     | Subset of arguments to compose (`[from, to]`, null = open-ended) |
+| `modifier`     | `?AssuranceModifier`         | Modify how the assurance is applied                              |
+| `exact`        | `bool`                       | The node passes *iff* the input is of the declared type          |
 
 ### AssuranceFrom (enum)
 
@@ -371,9 +384,10 @@ Determines how the assured type is derived from a method argument:
 
 | Case       | Meaning                                                 |
 |------------|---------------------------------------------------------|
-| `Value`    | The argument's literal type (e.g. `42` → `42`)          |
-| `Member`   | The iterable value type (e.g. `['a','b']` → `'a'\|'b'`) |
-| `Elements` | An array of the inner assurance type                    |
+| `Value`      | The argument's literal type (e.g. `42` → `42`)              |
+| `Member`     | The iterable value type (e.g. `['a','b']` → `'a'\|'b'`)     |
+| `Elements`   | An array of the inner assurance type                        |
+| `TypeString` | An instance of the class named by a class-string argument   |
 
 ### AssuranceCompose (enum)
 
@@ -388,7 +402,37 @@ Determines how child assurances are combined:
 
 Modifies how an assurance is applied:
 
-| Case       | Meaning                                  |
-|------------|------------------------------------------|
-| `Exclude`  | Removes the type instead of asserting it |
-| `Nullable` | Adds `null` to the assured type          |
+| Case      | Meaning                                                               |
+|-----------|-----------------------------------------------------------------------|
+| `Exclude` | The wrapped node's assurance is negated: passing implies NOT the type |
+
+### AssuranceSubject
+
+Declares how a `#[Composable]` prefix relates to its wrapped node's subject.
+A prefix without it yields no assurance for composed names: tools must drop,
+not copy, the wrapped node's assurance.
+
+```php
+// Same subject, modified: notEmail() negates Email's assurance
+#[Assurance(modifier: AssuranceModifier::Exclude)]
+#[AssuranceSubject(AssuranceSubjectMode::Wrap)]
+final readonly class Not implements Validator { /* ... */ }
+
+// Derived subject: keyEmail('name') assures only the container type
+#[Assurance(type: ['array', 'ArrayAccess'])]
+#[AssuranceSubject(AssuranceSubjectMode::Container)]
+final readonly class Key implements Validator { /* ... */ }
+```
+
+### AssuranceSubjectMode (enum)
+
+| Case        | Meaning                                                                          |
+|-------------|----------------------------------------------------------------------------------|
+| `Wrap`      | Same subject as the wrapped node: its assurance passes through, modified         |
+| `Elements`  | The wrapped node validates each element: assurance becomes `iterable<T>`         |
+| `Container` | The wrapped node validates a derived subject: only the container type is assured |
+
+A `Wrap` prefix's own `#[Assurance(type:)]` declares its *bypass set*: inputs
+it admits itself, in union with whatever the wrapped node assures. It is only
+meaningful in composition, never as a claim about direct calls; `exact` on it
+means the bypass set is an exact characterization.

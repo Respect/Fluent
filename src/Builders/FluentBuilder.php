@@ -20,6 +20,7 @@ use function array_values;
  * @template TNodes of list<object>
  * @template TSure
  * @template TSureNot
+ * @template TExact of bool = true
  */
 abstract readonly class FluentBuilder
 {
