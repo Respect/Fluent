@@ -25,6 +25,7 @@ final readonly class Assurance
         public AssuranceCompose|null $compose = null,
         public array|null $composeRange = null,
         public AssuranceModifier|null $modifier = null,
+        public bool $exact = false,
     ) {
     }
 }

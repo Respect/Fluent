@@ -178,15 +178,18 @@ a name, constructor arguments, and an optional wrapper.
 
 **NamespaceLookup vs ComposingLookup:** use `NamespaceLookup` for simple
 name-to-class mapping. Wrap it with `ComposingLookup` when you need prefix
-composition like `notEmail()` → `Not(Email())`. `ComposingLookup` supports
-recursive unwrapping, so `notNullOrEmail()` → `Not(NullOr(Email()))` works too.
+composition like `notEmail()` → `Not(Email())`. Composition resolves a single
+prefix level (e.g. `notEmail`, `nullOrEmail`); deeper nesting such as
+`notNullOrEmail` is not decomposed.
 
 ## Assurance attributes
 
 Node classes can declare what they assure about their input via `#[Assurance]`.
 Assertion methods are marked with `#[AssuranceAssertion]`, and `#[AssuranceParameter]`
 identifies specific parameters. Constructor parameters for composition use
-`#[ComposableParameter]`.
+`#[ComposableParameter]`. Composable prefixes declare how they relate to the
+wrapped node's subject with `#[AssuranceSubject]` (`Wrap`, `Elements`, or
+`Container`).
 
 This metadata is available at runtime through reflection and is also consumed
 by tools like [FluentAnalysis](https://github.com/Respect/FluentAnalysis)

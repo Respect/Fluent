@@ -12,6 +12,6 @@ namespace Respect\Fluent\Attributes;
 
 enum AssuranceModifier: string
 {
+    /** The wrapped node's assurance is negated: passing implies NOT the type */
     case Exclude = 'exclude';
-    case Nullable = 'nullable';
 }
